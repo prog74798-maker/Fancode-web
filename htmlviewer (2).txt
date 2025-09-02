@@ -1,0 +1,642 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <title>fancode live</title>
+    <link rel="stylesheet" href="https://cdn.vidstack.io/player/theme.css" />
+    <link rel="stylesheet" href="https://cdn.vidstack.io/player/video.css" />
+
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            margin: 0;
+            background-color: #1a1a1a;
+            color: #f1f1f1;
+            line-height: 1.6;
+            overflow-x: hidden;
+        }
+        .header {
+            background-color: #007bff;
+            padding: 20px;
+            text-align: center;
+            color: white;
+            font-size: 2em;
+            font-weight: bold;
+        }
+        .banner-text {
+            font-size: 2.5em;
+            font-weight: bold;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            background: linear-gradient(120deg, #ff0000, #ff8c00, #ffff00, #008000, #0000ff, #4b0082, #9400d3);
+            background-size: 200% auto;
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            animation: text-glow 5s linear infinite;
+        }
+        @keyframes text-glow {
+            from { background-position: 0% center; }
+            to { background-position: 200% center; }
+        }
+        .nav-toggle {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 1100;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            font-size: 1.5em;
+            cursor: pointer;
+            border-radius: 5px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5);
+            transition: transform 0.3s;
+        }
+        .nav-toggle:hover {
+            transform: scale(1.1);
+        }
+        .sidebar {
+            height: 100%;
+            width: 0;
+            position: fixed;
+            top: 0;
+            right: 0;
+            background-color: #2c2c2c;
+            box-shadow: -4px 0 15px rgba(0, 0, 0, 0.5);
+            padding-top: 60px;
+            transition: 0.5s;
+            z-index: 1050;
+        }
+        .sidebar.open {
+            width: 250px;
+        }
+        .sidebar-nav-item {
+            display: block;
+            padding: 15px 25px;
+            text-decoration: none;
+            color: white;
+            font-size: 1.2em;
+            transition: background-color 0.3s;
+            border-bottom: 1px solid #444;
+        }
+        .sidebar-nav-item:hover {
+            background-color: #007bff;
+        }
+        .sidebar-close {
+            position: absolute;
+            top: 10px;
+            right: 25px;
+            font-size: 3em;
+            color: white;
+            text-decoration: none;
+        }
+        .container {
+            max-width: 1200px;
+            margin: auto;
+            padding: 20px;
+        }
+        .section-title {
+            text-align: center;
+            font-size: 1.8em;
+            margin-top: 40px;
+            margin-bottom: 20px;
+            border-bottom: 2px solid #007bff;
+            display: inline-block;
+            padding-bottom: 5px;
+            color: #fff;
+        }
+        .match-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 20px;
+        }
+        .match-card {
+            background-color: #2c2c2c;
+            border-radius: 10px;
+            overflow: hidden;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5);
+            transition: transform 0.3s ease;
+        }
+        .match-card:hover {
+            transform: translateY(-5px);
+        }
+        .match-image {
+            width: 100%;
+            height: 200px;
+            object-fit: cover;
+        }
+        .match-content {
+            padding: 15px;
+        }
+        .match-title {
+            font-size: 1.2em;
+            font-weight: bold;
+            margin: 0 0 10px 0;
+            height: 3em;
+            overflow: hidden;
+        }
+        .match-info p {
+            margin: 5px 0;
+            font-size: 0.9em;
+        }
+        .teams-list {
+            display: flex;
+            align-items: center;
+            justify-content: space-around;
+            margin-top: 10px;
+        }
+        .team-info {
+            text-align: center;
+        }
+        .team-logo {
+            width: 50px;
+            height: 50px;
+            object-fit: contain;
+        }
+        .status-badge {
+            display: inline-block;
+            padding: 5px 10px;
+            border-radius: 5px;
+            font-weight: bold;
+            font-size: 0.8em;
+            text-transform: uppercase;
+        }
+        .live { background-color: #e74c3c; color: white; }
+        .upcoming { background-color: #3498db; color: white; }
+        .footer {
+            background-color: #0056b3;
+            text-align: center;
+            padding: 20px;
+            margin-top: 50px;
+        }
+        .footer a {
+            color: white;
+            text-decoration: none;
+            font-weight: bold;
+        }
+        .footer a:hover {
+            text-decoration: underline;
+        }
+        .player-container {
+            background-color: #000;
+            padding: 20px;
+            margin-top: 20px;
+            border-radius: 10px;
+            text-align: center;
+            position: sticky;
+            top: 0;
+            z-index: 999;
+        }
+        .player-placeholder {
+            display: none;
+            height: 500px;
+        }
+        #player-section media-player {
+            width: 100%;
+            max-width: 900px;
+            margin: 0 auto;
+            border-radius: 8px;
+        }
+        #back-to-matches-btn {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            margin-top: 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 1em;
+            font-weight: bold;
+            transition: background-color 0.3s ease;
+        }
+        #back-to-matches-btn:hover {
+            background-color: #0056b3;
+        }
+        .watch-btn-group {
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+            margin-top: 15px;
+        }
+        .watch-btn {
+            background-color: #e74c3c;
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            border-radius: 5px;
+            text-decoration: none;
+            cursor: pointer;
+            font-weight: bold;
+            transition: background-color 0.3s ease;
+            white-space: nowrap;
+        }
+        .watch-btn:hover {
+            background-color: #c0392b;
+        }
+        .score-display {
+            background: rgba(0, 0, 0, 0.3);
+            padding: 8px;
+            border-radius: 5px;
+            margin: 10px 0;
+            font-weight: bold;
+        }
+        .score-team {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 5px;
+        }
+        .batting-indicator {
+            color: #ff9900;
+            margin-left: 5px;
+        }
+    </style>
+    <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.8/dist/hls.min.js"></script>
+    <script src="https://cdn.vidstack.io/player" type="module"></script>
+</head>
+<body>
+
+    <header class="header">
+        <!-- Removed title text as per request -->
+        <h1 class="banner-text"></h1>
+    </header>
+
+    <button class="nav-toggle" onclick="toggleNav()">☰</button>
+    
+    <div id="sidebar" class="sidebar">
+        <a href="javascript:void(0)" class="sidebar-close" onclick="toggleNav()">×</a>
+        <a href="#top" class="sidebar-nav-item">🏠 Home</a>
+        <a href="#live-matches-section" class="sidebar-nav-item">🔥 Live Matches</a>
+        <a href="#upcoming-matches-section" class="sidebar-nav-item">📅 Schedule</a>
+        <a href="https://t.me/indian_iptv41" target="_blank" class="sidebar-nav-item">✈️ Telegram Channel</a>
+    </div>
+
+    <div class="player-placeholder" id="player-placeholder"></div>
+    <div id="player-section" class="player-container" style="display:none;">
+        <media-player id="video-player" playsinline title="fancode live" poster="https://files.vidstack.io/sprite-fight/poster.webp">
+            <media-provider></media-provider>
+            <media-video-layout></media-video-layout>
+        </media-player>
+        <button id="back-to-matches-btn" onclick="hidePlayer()">Back to Matches</button>
+    </div>
+
+    <div class="container">
+        <hr>
+        <h2 class="section-title" id="live-matches-section">Live Matches</h2>
+        <div id="live-matches-container" class="match-grid">
+            <p>Loading live matches...</p>
+        </div>
+        
+        <hr>
+        <h2 class="section-title" id="upcoming-matches-section">Upcoming Matches</h2>
+        <div id="upcoming-matches-container" class="match-grid">
+            <p>Loading upcoming matches...</p>
+        </div>
+    </div>
+
+    <footer class="footer">
+        <p>Join our Telegram Channel: <a href="https://t.me/indian_iptv41" target="_blank">fancode live</a></p>
+    </footer>
+
+    <script>
+        // Updated JSON data
+        const apiData = {
+            "Author": "DOCTOR_STRANGE",
+            "name": "FanCode Live Matches API",
+            "last_updated": "02:37:37 PM 31-08-2025",
+            "headers": {
+                "User-Agent": "ReactNativeVideo/7.19.1 (Linux;Android/13) AndroidXMedia3/1.1.1",
+                "Referer": "https://fancode.com/"
+            },
+            "total_matches": 39,
+            "live_matches": 8,
+            "upcoming_matches": 31,
+            "matches": [
+                {
+                    "category": "Cricket",
+                    "title": "Zimbabwe Vs Sri Lanka",
+                    "tournament": "Sri Lanka tour of Zimbabwe, 2025",
+                    "match_id": 133666,
+                    "status": "LIVE",
+                    "streamingStatus": "STARTED",
+                    "startTime": "31 August 2025 01:00 PM",
+                    "startDate": "01 January 1970 05:30 AM",
+                    "image": "https://www.fancode.com/skillup-uploads/cms-media/Sri-Lanka-Tour-of-Zimbabwe-old-match-card_1756139254995.png",
+                    "image_cdn": {
+                        "TATAPLAY": "https://images.fancode.com/aig/match/v1/133666_CASACARDS_PARTNER_16_9_1920_1080.png",
+                        "APP": "https://www.fancode.com/skillup-uploads/cms-media/Sri-Lanka-Tour-of-Zimbabwe-old-match-card_1756139254995.png",
+                        "PLAYBACK": "https://www.fancode.com/skillup-uploads/cms-media/Sri-Lanka-Tour-of-Zimbabwe-old-match-card_1756139254995.png",
+                        "LOGO": "https://www.fancode.com/skillup-uploads/cms-media/ZIM_vs-SL.png",
+                        "SPORTS": "https://www.fancode.com/skillup-uploads/cms-media/Cricket_Fallback_Old_match-card.jpg",
+                        "BG_IMAGE": "https://www.fancode.com/skillup-uploads/cms-media/Sri-Lanka-Tour-of-Zimbabwe-old-match-card_1756139254995.png",
+                        "SPORT_BY_IMAGE": "https://www.fancode.com/skillup-uploads/cms-media/Sri-Lanka-Tour-of-Zimbabwe-sporty-match-card_1756139255013.png",
+                        "CLOUDFARE": "https://d229kpbsb5jevy.cloudfront.net/vffancode2/aig/match/v1/133666_CASACARDS_PARTNER_16_9_1920_1080.png"
+                    },
+                    "teams": [
+                        {
+                            "name": "Zimbabwe",
+                            "shortName": "ZIM",
+                            "flag": {
+                                "src": "https://d13ir53smqqeyp.cloudfront.net/flags/cr-flags/FC-ZIM@2x.png"
+                            },
+                            "isWinner": null,
+                            "color": "#dfd32c",
+                            "cricketScore": [
+                                {
+                                    "runs": 106,
+                                    "overs": "21",
+                                    "balls": "126",
+                                    "status": "IN_PROGRESS",
+                                    "wickets": 1
+                                }
+                            ],
+                            "kabaddiScore": null,
+                            "footballScore": null,
+                            "basketBallScore": null,
+                            "hockeyScore": null,
+                            "status": {
+                                "cricket": {
+                                    "isBatting": true
+                                }
+                            }
+                        },
+                        {
+                            "name": "Sri Lanka",
+                            "shortName": "SL",
+                            "flag": {
+                                "src": "https://d13ir53smqqeyp.cloudfront.net/flags/cr-flags/FC-SRL@2x.png"
+                            },
+                            "isWinner": null,
+                            "color": "#164fad",
+                            "cricketScore": [],
+                            "kabaddiScore": null,
+                            "footballScore": null,
+                            "basketBallScore": null,
+                            "hockeyScore": null,
+                            "status": {
+                                "cricket": {
+                                    "isBatting": false
+                                }
+                            }
+                        }
+                    ],
+                    "language": "ENGLISH",
+                    "adfree_stream": "https://in-mc-fdlive.fancode.com/mumbai/133666_english_hls_45d889605d60726ta-di_h264/index.m3u8",
+                    "dai_stream": "https://dai.google.com/linear/hls/event/A92eEbvmT_CRhid4qgvlGg/master.m3u8",
+                    "STREAMING_CDN": {
+                        "Primary_Playback_URL": "https://in-mc-fdlive.fancode.com/mumbai/133666_english_hls_45d889605d60726ta-di_h264/index.m3u8",
+                        "fancode_cdn": "https://in-mc-fdlive.fancode.com/mumbai/133666_english_hls_45d889605d60726ta-di_h264/index.m3u8",
+                        "dai_google_cdn": "https://dai.google.com/linear/hls/event/A92eEbvmT_CRhid4qgvlGg/master.m3u8",
+                        "cloudfront_cdn": "Unavailable",
+                        "language": "ENGLISH"
+                    }
+                },
+                {
+                    "category": "Cricket",
+                    "title": "Adani Trivandrum Royals Vs Aries Kollam Sailors",
+                    "tournament": "Kerala Cricket League, 2025",
+                    "match_id": 133896,
+                    "status": "LIVE",
+                    "streamingStatus": "STARTED",
+                    "startTime": "31 August 2025 02:30 PM",
+                    "startDate": "01 January 1970 05:30 AM",
+                    "image": "https://www.fancode.com/skillup-uploads/cms-media/133896_5600_TR_AKS_fc-Web_1756275176807.jpg",
+                    "image_cdn": {
+                        "TATAPLAY": "https://images.fancode.com/aig/match/v1/133896_CASACARDS_PARTNER_16_9_1920_1080.png",
+                        "APP": "https://www.fancode.com/skillup-uploads/cms-media/133896_5600_TR_AKS_fc-Web_1756275176807.jpg",
+                        "PLAYBACK": "https://www.fancode.com/skillup-uploads/cms-media/133896_5600_TR_AKS_fc-Web_1756275176807.jpg",
+                        "LOGO": "https://www.fancode.com/skillup-uploads/cms-media/Kerala-Cricket-League-Tour-Logo-(1).png",
+                        "SPORTS": "https://www.fancode.com/skillup-uploads/cms-media/Cricket_Fallback_Old_match-card.jpg",
+                        "BG_IMAGE": "https://www.fancode.com/skillup-uploads/cms-media/133896_5600_TR_AKS_fc-Web_1756275176807.jpg",
+                        "SPORT_BY_IMAGE": "https://www.fancode.com/skillup-uploads/cms-media/133896_5600_TR_AKS_fc-App_1756275183144.jpg",
+                        "CLOUDFARE": "https://d229kpbsb5jevy.cloudfront.net/vffancode2/aig/match/v1/133896_CASACARDS_PARTNER_16_9_1920_1080.png"
+                    },
+                    "teams": [
+                        {
+                            "name": "Adani Trivandrum Royals",
+                            "shortName": "TR",
+                            "flag": {
+                                "src": "https://d13ir53smqqeyp.cloudfront.net/flags/cr-flags/FC-TRK@2x.png"
+                            },
+                            "isWinner": null,
+                            "color": "#74B8E1",
+                            "cricketScore": [
+                                {
+                                    "runs": 11,
+                                    "overs": "1",
+                                    "balls": "6",
+                                    "status": "IN_PROGRESS",
+                                    "wickets": 0
+                                }
+                            ],
+                            "kabaddiScore": null,
+                            "footballScore": null,
+                            "basketBallScore": null,
+                            "hockeyScore": null,
+                            "status": {
+                                "cricket": {
+                                    "isBatting": true
+                                }
+                            }
+                        },
+                        {
+                            "name": "Aries Kollam Sailors",
+                            "shortName": "AKS",
+                            "flag": {
+                                "src": "https://d13ir53smqqeyp.cloudfront.net/flags/cr-flags/FC-AKS@2x.png"
+                            },
+                            "isWinner": null,
+                            "color": "#b7e330",
+                            "cricketScore": [],
+                            "kabaddiScore": null,
+                            "footballScore": null,
+                            "basketBallScore": null,
+                            "hockeyScore": null,
+                            "status": {
+                                "cricket": {
+                                    "isBatting": false
+                                }
+                            }
+                        }
+                    ],
+                    "language": "ENGLISH",
+                    "adfree_stream": "https://in-mc-fdlive.fancode.com/mumbai/133896_english_hls_b7ff39263c73011ta-di_h264/index.m3u8",
+                    "dai_stream": "https://dai.google.com/linear/hls/event/GlGwWvhhTyaiNEMu4ebtbQ/master.m3u8",
+                    "STREAMING_CDN": {
+                        "Primary_Playback_URL": "https://in-mc-fdlive.fancode.com/mumbai/133896_english_hls_b7ff39263c73011ta-di_h264/index.m3u8",
+                        "fancode_cdn": "https://in-mc-fdlive.fancode.com/mumbai/133896_english_hls_b7ff39263c73011ta-di_h264/index.m3u8",
+                        "dai_google_cdn": "https://dai.google.com/linear/hls/event/GlGwWvhhTyaiNEMu4ebtbQ/master.m3u8",
+                        "cloudfront_cdn": "Unavailable",
+                        "language": "ENGLISH"
+                    }
+                }
+                // Additional matches...
+            ]
+        };
+
+        const liveMatchesContainer = document.getElementById('live-matches-container');
+        const upcomingMatchesContainer = document.getElementById('upcoming-matches-container');
+        const playerSection = document.getElementById('player-section');
+        const playerElement = document.getElementById('video-player');
+        const playerPlaceholder = document.getElementById('player-placeholder');
+
+        let hlsInstance = null;
+
+        function toggleNav() {
+            const sidebar = document.getElementById('sidebar');
+            if (sidebar.style.width === '250px') {
+                sidebar.style.width = '0';
+            } else {
+                sidebar.style.width = '250px';
+            }
+        }
+
+        function createMatchCard(match) {
+            const matchCard = document.createElement('div');
+            matchCard.className = 'match-card';
+
+            const teams = match.teams.map(team => `
+                <div class="team-info">
+                    <img src="${team.flag.src}" alt="${team.shortName} Flag" class="team-logo" />
+                    <p>${team.shortName}</p>
+                </div>
+            `).join('');
+
+            const statusClass = match.status === 'LIVE' ? 'live' : 'upcoming';
+
+            let scoreDisplay = '';
+            if (match.teams && match.teams[0].cricketScore && match.teams[0].cricketScore.length > 0) {
+                scoreDisplay = '<div class="score-display">';
+                match.teams.forEach(team => {
+                    const isBatting = team.status?.cricket?.isBatting;
+                    const score = team.cricketScore && team.cricketScore[0] ? 
+                        `${team.cricketScore[0].runs}/${team.cricketScore[0].wickets} (${team.cricketScore[0].overs})` : 
+                        'Yet to bat';
+
+                    scoreDisplay += `
+                        <div class="score-team">
+                            <span>${team.shortName}: ${score}</span>
+                            ${isBatting ? '<span class="batting-indicator">🏏</span>' : ''}
+                        </div>
+                    `;
+                });
+                scoreDisplay += '</div>';
+            }
+
+            let liveButtons = '';
+            if (match.status === 'LIVE' && match.STREAMING_CDN && match.STREAMING_CDN.Primary_Playback_URL) {
+                liveButtons = `
+                    <div class="watch-btn-group">
+                        <button class="watch-btn" onclick="playMatch('${match.STREAMING_CDN.Primary_Playback_URL}', event)">
+                            Watch Now (${match.language})
+                        </button>
+                    </div>
+                `;
+            } else if (match.status === 'NOT_STARTED') {
+                liveButtons = `<p class="upcoming-text">Coming Soon</p>`;
+            }
+
+            matchCard.innerHTML = `
+                <img src="${match.image}" alt="${match.title}" class="match-image" />
+                <div class="match-content">
+                    <p class="match-info">${match.tournament}</p>
+                    <h3 class="match-title">${match.title}</h3>
+                    ${scoreDisplay}
+                    <p class="match-info">Language: ${match.language}</p>
+                    <p class="match-info">Start Time: ${match.startTime}</p>
+                    <div class="teams-list">
+                        ${teams}
+                    </div>
+                    <p class="match-info">Status: <span class="status-badge ${statusClass}">${match.status}</span></p>
+                    ${liveButtons}
+                </div>
+            `;
+            return matchCard;
+        }
+
+        async function playMatch(url, event) {
+            event.preventDefault();
+
+            liveMatchesContainer.style.display = 'none';
+            upcomingMatchesContainer.style.display = 'none';
+            playerSection.style.display = 'block';
+            playerPlaceholder.style.display = 'block';
+
+            await customElements.whenDefined('media-player');
+            const mediaProvider = playerElement.querySelector('media-provider');
+
+            if (Hls.isSupported() && url.endsWith('.m3u8')) {
+                if (hlsInstance) {
+                    hlsInstance.destroy();
+                }
+                hlsInstance = new Hls({
+                    pLoader: function(config) {
+                        const loader = new Hls.DefaultConfig.loader(config);
+                        loader.load = function(context, callbacks, data) {
+                            context.headers = apiData.headers;
+                            return Hls.DefaultConfig.loader.prototype.load.call(this, context, callbacks, data);
+                        };
+                        return loader;
+                    }
+                });
+                hlsInstance.loadSource(url);
+                hlsInstance.attachMedia(mediaProvider.media);
+                playerElement.src = url;
+
+                hlsInstance.on(Hls.Events.MANIFEST_PARSED, function() {
+                    playerElement.play();
+                });
+            } else {
+                if (hlsInstance) {
+                    hlsInstance.destroy();
+                    hlsInstance = null;
+                }
+                playerElement.src = url;
+                playerElement.play();
+            }
+        }
+
+        function hidePlayer() {
+            if (hlsInstance) {
+                hlsInstance.destroy();
+                hlsInstance = null;
+            }
+            if (playerElement) {
+                playerElement.pause();
+                playerElement.src = '';
+            }
+            playerSection.style.display = 'none';
+            playerPlaceholder.style.display = 'none';
+            liveMatchesContainer.style.display = 'grid';
+            upcomingMatchesContainer.style.display = 'grid';
+        }
+
+        function renderMatches() {
+            liveMatchesContainer.innerHTML = '';
+            upcomingMatchesContainer.innerHTML = '';
+
+            const liveMatches = apiData.matches.filter(m => m.status === 'LIVE');
+            const upcomingMatches = apiData.matches.filter(m => m.status === 'NOT_STARTED');
+
+            if (liveMatches.length > 0) {
+                liveMatches.forEach(match => {
+                    liveMatchesContainer.appendChild(createMatchCard(match));
+                });
+            } else {
+                liveMatchesContainer.innerHTML = '<p>No live matches at the moment.</p>';
+            }
+
+            if (upcomingMatches.length > 0) {
+                upcomingMatches.forEach(match => {
+                    upcomingMatchesContainer.appendChild(createMatchCard(match));
+                });
+            } else {
+                upcomingMatchesContainer.innerHTML = '<p>No upcoming matches at the moment.</p>';
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', renderMatches);
+    </script>
+</body>
+</html>
