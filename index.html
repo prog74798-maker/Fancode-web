@@ -1,10 +1,11 @@
 <?php
-$currentUrl = ((isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on') ? "https" : "http") . "://" . $_SERVER['HTTP_HOST'] . $_SERVER['REQUEST_URI'];
-$scriptName = basename($_SERVER['SCRIPT_NAME']);
-$indexUrl = str_replace($scriptName, "", $currentUrl);
-
 session_start();
+
+// Redirect if already logged in
 if (isset($_SESSION['user'])) {
+    $currentUrl = ((isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on') ? "https" : "http") . "://" . $_SERVER['HTTP_HOST'] . $_SERVER['REQUEST_URI'];
+    $scriptName = basename($_SERVER['SCRIPT_NAME']);
+    $indexUrl = str_replace($scriptName, "", $currentUrl);
     header("Location: $indexUrl");
     exit();
 }
@@ -13,19 +14,33 @@ $popup_type = "";
 $error = "";
 
 if ($_SERVER["REQUEST_METHOD"] == "POST") {
-    $username = $_POST['username'];
-    $password = $_POST['password'];
-
-    $valid_username = "raman";
-    $valid_password = "raman1";
-
-    if ($username === $valid_username && $password === $valid_password) {
-        $_SESSION['user'] = $username;
-        header("Location: $indexUrl");
-        exit();
-    } else {
-        $error = "Invalid username or password!";
+    // Validate and sanitize inputs
+    $username = filter_input(INPUT_POST, 'username', FILTER_SANITIZE_STRING);
+    $password = filter_input(INPUT_POST, 'password', FILTER_SANITIZE_STRING);
+    
+    // Check if inputs are not empty
+    if (empty($username) || empty($password)) {
+        $error = "Please enter both username and password!";
         $popup_type = "error";
+    } else {
+        // In a real application, you should use password_hash() and password_verify()
+        // For demo purposes only - replace with secure authentication
+        $valid_username = "raman";
+        $valid_password = "raman1";
+        
+        if ($username === $valid_username && $password === $valid_password) {
+            $_SESSION['user'] = $username;
+            $_SESSION['login_time'] = time();
+            
+            $currentUrl = ((isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on') ? "https" : "http") . "://" . $_SERVER['HTTP_HOST'] . $_SERVER['REQUEST_URI'];
+            $scriptName = basename($_SERVER['SCRIPT_NAME']);
+            $indexUrl = str_replace($scriptName, "", $currentUrl);
+            header("Location: $indexUrl");
+            exit();
+        } else {
+            $error = "Invalid username or password!";
+            $popup_type = "error";
+        }
     }
 }
 ?>
@@ -106,6 +121,17 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             box-shadow: 0 6px 20px rgba(0, 150, 199, 0.6);
             transform: translateY(-2px);
         }  
+        
+        .overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.7);
+            z-index: 999;
+            display: none;
+        }
 
         .popup {
             position: fixed;
@@ -126,7 +152,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         .popup button {
             width: auto;
             padding: 10px 20px;
-            margin: 0 auto;
+            margin: 15px auto 0;
             display: inline-block;
             background: linear-gradient(45deg, #0077b6, #023e8a);
             color: white;
@@ -142,16 +168,22 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             background: linear-gradient(45deg, #0096c7, #0353a4);
             box-shadow: 0 0px 10px rgba(0, 150, 199, 0.6);
             transform: translateY(-2px);
-        }   
+        }
+        
+        .footer {
+            text-align: center;
+            margin-top: 20px;
+            font-size: 18px;
+        }
     </style>
 </head>
 <body>
     <div class="container">
         <h2>Login</h2>
-        <form method="POST">
+        <form method="POST" action="">
             <div class="form-group">
                 <label for="username">Username</label>
-                <input type="text" id="username" name="username" placeholder="Enter your username" required>
+                <input type="text" id="username" name="username" placeholder="Enter your username" required value="<?php echo isset($_POST['username']) ? htmlspecialchars($_POST['username']) : ''; ?>">
             </div>
             <div class="form-group">
                 <label for="password">Password</label>
@@ -159,11 +191,14 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             </div>
             <button type="submit">Login</button>
         </form>        
+        <div class="footer">
+            <strong>Coded with ❤️ by RKDYIPTV</strong>
+        </div>
     </div>
 
     <!-- Popup and Overlay -->
-    <div id="overlay" class="overlay" onclick="hidePopup()"></div>
-    <div id="popup" class="popup <?php echo $popup_type; ?>">
+    <div id="overlay" class="overlay"></div>
+    <div id="popup" class="popup">
         <p id="popup-message"></p>
         <div id="popup-buttons">
             <button onclick="hidePopup()">OK</button>
@@ -188,15 +223,5 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         document.getElementById("overlay").style.display = "none";
         document.getElementById("popup").style.display = "none";
     }
-
-    document.addEventListener("DOMContentLoaded", function() {
-        let footer = document.createElement("div");
-        footer.style.textAlign = "center";
-        footer.style.marginTop = "20px";
-        footer.style.fontSize = "18px";
-        footer.innerHTML = "<strong>Coded with ❤️ by RKDYIPTV </strong>";
-        
-        document.querySelector(".container").appendChild(footer);
-    });
 </script>
 </html>
