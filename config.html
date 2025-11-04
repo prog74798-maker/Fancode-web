@@ -1,225 +1,261 @@
 <?php
-error_reporting(0);
+session_start();
+if (!isset($_SESSION['user'])) {
+    header("Location: /api/login.php");
+    exit();
+}
+
+// Vercel-specific directory setup
 $directories = [
-  "data" => "data",
-  "filter" => "data/filter",
-  "playlist" => "data/playlist"
+    "data" => "/tmp/data",
+    "filter" => "/tmp/data/filter", 
+    "playlist" => "/tmp/data/playlist"
 ];
 
-foreach ($directories as $key => $dir_path) {
-  if (!is_dir($dir_path)) {
-      mkdir($dir_path, 0777, true);
-  }
+foreach ($directories as $dir_path) {
+    if (!is_dir($dir_path)) {
+        mkdir($dir_path, 0777, true);
+    }
 }
 
 $tokenFile = $directories["data"] . "/token.txt";
-
-date_default_timezone_set("Asia/Kolkata");
-
-//Stalker Portal Data================================================================
-$url = $mac = $sn = $device_id_1 = $device_id_2 = $sig = "";
-
 $jsonFile = $directories["data"] . "/data.json";
+
+date_default_timezone_set("UTC");
+
+// Initialize variables
+$url = $mac = $sn = $device_id_1 = $device_id_2 = $sig = "";
+$message = $message_type = "";
 
 if (file_exists($jsonFile)) {
     $jsonData = file_get_contents($jsonFile);
     $data = json_decode($jsonData, true);
-
-    if ($data === null) {
-        die("Error: JSON decoding failed. Check your JSON format.");
+    if ($data !== null) {
+        $url = $data["url"] ?? "";
+        $mac = $data["mac"] ?? "";
+        $sn = $data["serial_number"] ?? "";
+        $device_id_1 = $data["device_id_1"] ?? "";
+        $device_id_2 = $data["device_id_2"] ?? "";
+        $sig = $data["signature"] ?? "";
     }
-
-    $url = $data["url"] ?? "";
-    $mac = $data["mac"] ?? "";
-    $sn = $data["serial_number"] ?? "";
-    $device_id_1 = $data["device_id_1"] ?? "";
-    $device_id_2 = $data["device_id_2"] ?? "";
-    $sig = $data["signature"] ?? "";
 }
 
-$api = "263";
-$host = parse_url($url)["host"];
-
-//Handshake==========================================================================
-function handshake()
-{ 
-  global $host;
-  $Xurl = "http://$host/stalker_portal/server/load.php?type=stb&action=handshake&token=&JsHttpRequest=1-xml";
-  $HED = [
-    'User-Agent: Mozilla/5.0 (QtEmbedded; U; Linux; C) AppleWebKit/533.3 (KHTML, like Gecko) MAG200 stbapp ver: 2 rev: 250 Safari/533.3',
-      'Connection: Keep-Alive',
-      'Accept-Encoding: gzip',
-      'X-User-Agent: Model: MAG250; Link: WiFi',
-      "Referer: http://$host/stalker_portal/c/",
-      "Host: $host",
-      "Connection: Keep-Alive",
-  ];
-  $Info_Data = Info($Xurl,$HED);
-  $Info_Status = $Info_Data["Info_arr"]["info"];
-  $Info_Data =  $Info_Data["Info_arr"]["data"];
-  $Info_Data_Json = json_decode($Info_Data,true);
-  $Info_Encode = array(
-    "Info_arr" => array(
-        "token" => $Info_Data_Json["js"]["token"],
-        "random" => $Info_Data_Json["js"]["random"],
-        "Status Code" => $Info_Status
-    )
-  );
-  return $Info_Encode;
+// Handle form submission
+if ($_SERVER["REQUEST_METHOD"] == "POST") {
+    $url = filter_input(INPUT_POST, 'url', FILTER_SANITIZE_URL);
+    $mac = filter_input(INPUT_POST, 'mac', FILTER_SANITIZE_STRING);
+    $sn = filter_input(INPUT_POST, 'sn', FILTER_SANITIZE_STRING);
+    $device_id_1 = filter_input(INPUT_POST, 'device_id_1', FILTER_SANITIZE_STRING);
+    $device_id_2 = filter_input(INPUT_POST, 'device_id_2', FILTER_SANITIZE_STRING);
+    $sig = filter_input(INPUT_POST, 'sig', FILTER_SANITIZE_STRING);
+    
+    if (empty($url) || empty($mac)) {
+        $message = "URL and MAC address are required!";
+        $message_type = "error";
+    } else {
+        $configData = [
+            "url" => $url,
+            "mac" => $mac,
+            "serial_number" => $sn,
+            "device_id_1" => $device_id_1,
+            "device_id_2" => $device_id_2,
+            "signature" => $sig
+        ];
+        
+        if (file_put_contents($jsonFile, json_encode($configData, JSON_PRETTY_PRINT))) {
+            $message = "Configuration saved successfully!";
+            $message_type = "success";
+        } else {
+            $message = "Error saving configuration!";
+            $message_type = "error";
+        }
+    }
 }
 
-//Generate Token======================================================================
-function generate_token() 
-{
-  global $tokenFile, $host, $mac;
-  $Info_Decode = handshake();
-  $Bearer_token = $Info_Decode["Info_arr"]["token"];
-  $Bearer_token = re_generate_token($Bearer_token);
-  $Bearer_token = $Bearer_token["Info_arr"]["token"];
-  get_profile($Bearer_token);
-  file_put_contents($tokenFile, $Bearer_token);  
-  return $Bearer_token;
-}
-
-//Re Generate Token===================================================================
-function re_generate_token($Bearer_token)
-{
-  global $host;
-  $Xurl = "http://$host/stalker_portal/server/load.php?type=stb&action=handshake&token=$Bearer_token&JsHttpRequest=1-xml";
-  $HED = [
-      'User-Agent: Mozilla/5.0 (QtEmbedded; U; Linux; C) AppleWebKit/533.3 (KHTML, like Gecko) MAG200 stbapp ver: 2 rev: 250 Safari/533.3',
-      'Connection: Keep-Alive',
-      'Accept-Encoding: gzip',
-      'X-User-Agent: Model: MAG250; Link: WiFi',
-      "Referer: http://$host/stalker_portal/c/",
-      "Host: $host",
-      "Connection: Keep-Alive",
-  ];
-  $Info_Data = Info($Xurl,$HED);
-  $Info_Data =  $Info_Data["Info_arr"]["data"];
-  $Info_Data_Json = json_decode($Info_Data,true);
-  $Info_Encode = array(
-    "Info_arr" => array(
-    "token" => $Info_Data_Json["js"]["token"],
-    "random" => $Info_Data_Json["js"]["random"],
-    )
-  );
-
-  return $Info_Encode;
-}
-
-//Get Profile========================================================================
-function get_profile($Bearer_token)
-{
-  global $host,$mac,$sn,$device_id_1,$device_id_2,$sig,$api;
-  $timestamp = time();
-  $Info_Decode = handshake();
-  $Info_Decode_Random = $Info_Decode["Info_arr"]["random"];
-  $Xurl = "http://$host/stalker_portal/server/load.php?type=stb&action=get_profile&hd=1&ver=ImageDescription%3A+0.2.18-r14-pub-250%3B+ImageDate%3A+Fri+Jan+15+15%3A20%3A44+EET+2016%3B+PORTAL+version%3A+5.1.0%3B+API+Version%3A+JS+API+version%3A+328%3B+STB+API+version%3A+134%3B+Player+Engine+version%3A+0x566&num_banks=2&sn=$sn&stb_type=MAG250&image_version=218&video_out=hdmi&device_id=$device_id_1&device_id2=$device_id_2&signature=$sig&auth_second_step=1&hw_version=1.7-BD-00&not_valid_token=0&client_type=STB&hw_version_2=08e10744513ba2b4847402b6718c0eae&timestamp=$timestamp&api_signature=$api&metrics=%7B%22mac%22%3A%22$mac%22%2C%22sn%22%3A%22$sn%22%2C%22model%22%3A%22MAG250%22%2C%22type%22%3A%22STB%22%2C%22uid%22%3A%22%22%2C%22random%22%3A%22$Info_Decode_Random%22%7D&JsHttpRequest=1-xml";
-  $HED = [
-    'User-Agent: Mozilla/5.0 (QtEmbedded; U; Linux; C) AppleWebKit/533.3 (KHTML, like Gecko) MAG200 stbapp ver: 2 rev: 250 Safari/533.3',
-    'Connection: Keep-Alive',
-    'Accept-Encoding: gzip',
-    'X-User-Agent: Model: MAG250; Link: WiFi',
-    "Referer: http://$host/stalker_portal/c/",
-    "Authorization: Bearer " . $Bearer_token,
-    "Host: $host",
-    "Connection: Keep-Alive",
-  ];
-  Info($Xurl,$HED);
-}
-
-//INFO================================================================================
-function Info($Xurl,$HED)
-{
-  global $mac;
-  $cURL_Info = curl_init();
-  curl_setopt_array($cURL_Info, [
-    CURLOPT_URL => $Xurl,
-    CURLOPT_RETURNTRANSFER => true,
-    CURLOPT_ENCODING => 'gzip',
-    CURLOPT_MAXREDIRS => 10,
-    CURLOPT_TIMEOUT => 30,
-    CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
-    CURLOPT_CUSTOMREQUEST => 'GET',
-    CURLOPT_COOKIE => "mac=$mac; stb_lang=en; timezone=GMT",
-    CURLOPT_HTTPHEADER => $HED,
-  ]);
-  $Info_Data = curl_exec($cURL_Info);
-  curl_close($cURL_Info);
-  $Info_Status = curl_getinfo($cURL_Info);
-  $Info_Encode = array(
-    "Info_arr" => array(
-        "data" => $Info_Data,
-        "info" => $Info_Status,
-    )
-  );
-  return  $Info_Encode;
-}
-
-//Get Groups================================================================================
-function group_title($all = false) {
-  global $host;
-  global $directories;
-
-  $dir_path = $directories["filter"];
-
-  if (!is_dir($dir_path)) {
-      mkdir($dir_path, 0777, true);
-  }
-  $filter_file = "$dir_path/$host.json";
-
-  if (file_exists($filter_file)) {
-      $json_data = json_decode(file_get_contents($filter_file), true);
-      if (!empty($json_data)) {
-          unset($json_data["*"]);
-          
-          if ($all) {
-              return array_column($json_data, 'title', 'id');
-          }
-          
-          return array_column(array_filter($json_data, function ($item) {
-              return $item['filter'] === true;
-          }), 'title', 'id');
-      }
-  }
-
-  $group_title_url = "http://$host/stalker_portal/server/load.php?type=itv&action=get_genres&JsHttpRequest=1-xml";
-  $headers = [
-      "User-Agent: Mozilla/5.0 (QtEmbedded; U; Linux; C) AppleWebKit/533.3 (KHTML, like Gecko) MAG200 stbapp ver: 2 rev: 250 Safari/533.3",
-      "Authorization: Bearer " . generate_token(),
-      "X-User-Agent: Model: MAG250; Link: WiFi",
-      "Referer: http://$host/stalker_portal/c/",
-      "Accept: */*",
-      "Host: $host",
-      "Connection: Keep-Alive",
-      "Accept-Encoding: gzip",
-  ];
-
-  $response = Info($group_title_url, $headers);
-  if (empty($response["Info_arr"]["data"])) {
-      return [];
-  }
-
-  $json_api_data = json_decode($response["Info_arr"]["data"], true);
-  if (!isset($json_api_data["js"]) || !is_array($json_api_data["js"])) {
-      return [];
-  }
-
-  $filtered_data = [];
-  foreach ($json_api_data["js"] as $genre) {
-      if ($genre['id'] === "*") {
-          continue; // Skip the "*" entry
-      }
-      $filtered_data[$genre['id']] = [
-          'id' => $genre['id'],
-          'title' => $genre['title'],
-          'filter' => true,
-      ];
-  }
-
-  file_put_contents($filter_file, json_encode($filtered_data));
-
-  return array_column($filtered_data, 'title', 'id');
+// Test connection
+if (isset($_GET['test'])) {
+    require_once 'config.php';
+    $token = generate_token();
+    if (!empty($token)) {
+        $message = "Connection successful! Token generated.";
+        $message_type = "success";
+    } else {
+        $message = "Connection failed! Please check your configuration.";
+        $message_type = "error";
+    }
 }
 ?>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Configuration - mac2m3u</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Arial, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e, #16213e);
+            min-height: 100vh;
+            margin: 0;
+            color: #e0e0e0;
+            padding: 20px;
+        }
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            background: rgba(34, 40, 49, 0.9);
+            border-radius: 20px;
+            padding: 30px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        h1 {
+            color: #00d4ff;
+            text-shadow: 0 0 10px rgba(0, 212, 255, 0.5);
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .form-group {
+            margin-bottom: 20px;
+        }
+        .form-group label {
+            display: block;
+            font-weight: 600;
+            color: #a0a0a0;
+            margin-bottom: 5px;
+        }
+        .form-group input {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+            background: rgba(255, 255, 255, 0.05);
+            color: #e0e0e0;
+            font-size: 16px;
+            box-sizing: border-box;
+        }
+        .form-group input:focus {
+            outline: none;
+            border-color: #00d4ff;
+            box-shadow: 0 0 5px rgba(0, 212, 255, 0.5);
+        }
+        .button-group {
+            display: flex;
+            gap: 15px;
+            margin-top: 30px;
+        }
+        button {
+            flex: 1;
+            padding: 14px;
+            border: none;
+            border-radius: 10px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        .btn-primary {
+            background: linear-gradient(45deg, #0077b6, #023e8a);
+            color: white;
+        }
+        .btn-primary:hover {
+            background: linear-gradient(45deg, #0096c7, #0353a4);
+            transform: translateY(-2px);
+        }
+        .btn-secondary {
+            background: linear-gradient(45deg, #6c757d, #495057);
+            color: white;
+        }
+        .btn-secondary:hover {
+            background: linear-gradient(45deg, #868e96, #5a6268);
+            transform: translateY(-2px);
+        }
+        .message {
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            text-align: center;
+            font-weight: 600;
+        }
+        .success {
+            background: rgba(40, 167, 69, 0.2);
+            border: 1px solid #28a745;
+            color: #28a745;
+        }
+        .error {
+            background: rgba(220, 53, 69, 0.2);
+            border: 1px solid #dc3545;
+            color: #dc3545;
+        }
+        .nav {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 30px;
+        }
+        .nav a {
+            color: #00d4ff;
+            text-decoration: none;
+            padding: 10px 20px;
+            border-radius: 10px;
+            background: rgba(0, 212, 255, 0.1);
+            transition: all 0.3s ease;
+        }
+        .nav a:hover {
+            background: rgba(0, 212, 255, 0.2);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="nav">
+            <a href="/api/index.php">Home</a>
+            <a href="/api/logout.php">Logout</a>
+        </div>
+        
+        <h1>Portal Configuration</h1>
+        
+        <?php if (!empty($message)): ?>
+            <div class="message <?php echo $message_type; ?>">
+                <?php echo htmlspecialchars($message); ?>
+            </div>
+        <?php endif; ?>
+        
+        <form method="POST" action="">
+            <div class="form-group">
+                <label for="url">Portal URL</label>
+                <input type="url" id="url" name="url" value="<?php echo htmlspecialchars($url); ?>" placeholder="http://portal.example.com" required>
+            </div>
+            
+            <div class="form-group">
+                <label for="mac">MAC Address</label>
+                <input type="text" id="mac" name="mac" value="<?php echo htmlspecialchars($mac); ?>" placeholder="00:1A:79:XX:XX:XX" required>
+            </div>
+            
+            <div class="form-group">
+                <label for="sn">Serial Number (Optional)</label>
+                <input type="text" id="sn" name="sn" value="<?php echo htmlspecialchars($sn); ?>" placeholder="Serial number">
+            </div>
+            
+            <div class="form-group">
+                <label for="device_id_1">Device ID 1 (Optional)</label>
+                <input type="text" id="device_id_1" name="device_id_1" value="<?php echo htmlspecialchars($device_id_1); ?>" placeholder="Device ID 1">
+            </div>
+            
+            <div class="form-group">
+                <label for="device_id_2">Device ID 2 (Optional)</label>
+                <input type="text" id="device_id_2" name="device_id_2" value="<?php echo htmlspecialchars($device_id_2); ?>" placeholder="Device ID 2">
+            </div>
+            
+            <div class="form-group">
+                <label for="sig">Signature (Optional)</label>
+                <input type="text" id="sig" name="sig" value="<?php echo htmlspecialchars($sig); ?>" placeholder="Signature">
+            </div>
+            
+            <div class="button-group">
+                <button type="submit" name="save_config" class="btn-primary">Save Configuration</button>
+                <a href="?test=1" class="btn-secondary" style="text-decoration: none; text-align: center;">Test Connection</a>
+            </div>
+        </form>
+    </div>
+</body>
+</html>
