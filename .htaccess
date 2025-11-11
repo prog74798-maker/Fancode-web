@@ -1,2 +1,16 @@
 RewriteEngine On
-RewriteRule ^data(/|$) - [R=403,L]
+
+# Allow all HTTP methods
+<Limit GET POST PUT DELETE HEAD OPTIONS PATCH>
+    Require all granted
+</Limit>
+
+# Handle API routes
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteRule ^api/(.*)$ api/index.php?path=$1 [QSA,L]
+
+# Handle frontend routes  
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteRule ^(.*)$ index.php [QSA,L]
