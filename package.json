@@ -1,0 +1,10 @@
+{
+  "name": "mac2m3u-vercel",
+  "version": "1.0.0",
+  "description": "Stalker Portal to M3U converter for Vercel",
+  "scripts": {
+    "dev": "php -S localhost:3000"
+  },
+  "dependencies": {},
+  "devDependencies": {}
+}
