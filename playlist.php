@@ -1,83 +1,188 @@
 <?php
-include "config.php";
-
-$playlist_path = $directories["playlist"];
-
-$protocol = isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? 'https://' : 'http://';
-$server = $_SERVER['HTTP_HOST'] ?? '';
-$currentScript = parse_url($_SERVER["REQUEST_URI"], PHP_URL_PATH);
-
-function generateId($cmd) {
-    $cmdParts = explode("/", $cmd);
-    if ($cmdParts[2] === "localhost") {
-        $cmd = str_ireplace('ffrt http://localhost/ch/', '', $cmd);
-    } else if ($cmdParts[2] === "") {
-        $cmd = str_ireplace('ffrt http:///ch/', '', $cmd);
-    }
-    return $cmd;
+session_start();
+if (!isset($_SESSION['user'])) {
+    header("Location: /api/login.php");
+    exit();
 }
 
-function getImageUrl($channel, $host) {    
-    $imageExtensions = [".png", ".jpg"];
-    $emptyReplacements = ['', ""];
-    
-    $logo = str_replace($imageExtensions, $emptyReplacements, $channel['logo']);
-    if (is_numeric($logo)) {
-        return 'http://' . $host . '/stalker_portal/misc/logos/320/' . $channel['logo'];
-    } else {
-        return "https://i.ibb.co/VWVcf4t5/RKDYIPTV.jpg";
-    }
+include 'config.php';
+
+// Check if portal is configured
+if (empty($host)) {
+    header('Content-Type: text/plain');
+    die("#EXTM3U\n# Error: Portal not configured. Please set up your portal first.");
 }
 
-$playlist_file = "$playlist_path/$host.m3u";
+$Bearer_token = (file_exists($tokenFile) && filesize($tokenFile)) ? file_get_contents($tokenFile) : generate_token();
 
-if (file_exists($playlist_file)) {
-    $playlistContent = file_get_contents($playlist_file);
-    $playPath = str_replace("playlist.php", "", $currentScript);
-    $playlistContent = preg_replace('/^(?!#).*\//m', "{$protocol}{$server}{$playPath}", $playlistContent);
+// Check if we have cached playlist
+$playlist_file = $directories["playlist"] . "/{$host}.m3u";
+$use_cache = !isset($_GET['refresh']);
+
+if ($use_cache && file_exists($playlist_file) && (time() - filemtime($playlist_file)) < 3600) {
+    // Serve cached playlist if it's less than 1 hour old
     header('Content-Type: audio/x-mpegurl');
-    header('Content-Disposition: inline; filename="playlist.m3u"');
-    echo $playlistContent;  
-} else {
-    $Playlist_url = "http://$host/stalker_portal/server/load.php?type=itv&action=get_all_channels&JsHttpRequest=1-xml";
+    header('Content-Disposition: attachment; filename="playlist.m3u"');
+    readfile($playlist_file);
+    exit;
+}
 
-    $Playlist_HED = [
-        "User-Agent: Mozilla/5.0 (QtEmbedded; U; Linux; C) AppleWebKit/533.3 (KHTML, like Gecko) MAG200 stbapp ver: 2 rev: 250 Safari/533.3",
-        "Authorization: Bearer " . generate_token(),
-        "X-User-Agent: Model: MAG250; Link: WiFi",
+function getChannels($host, $Bearer_token, $mac) {
+    $url = "http://$host/stalker_portal/server/load.php?type=itv&action=get_all_channels&JsHttpRequest=1-xml";
+    
+    $headers = [
+        "Cookie: timezone=GMT; stb_lang=en; mac=$mac",
         "Referer: http://$host/stalker_portal/c/",
         "Accept: */*",
+        "User-Agent: Mozilla/5.0 (QtEmbedded; U; Linux; C) AppleWebKit/533.3 (KHTML, like Gecko) MAG200 stbapp ver: 2 rev: 250 Safari/533.3",
+        "X-User-Agent: Model: MAG250; Link: WiFi",
+        "Authorization: Bearer $Bearer_token",
         "Host: $host",
         "Connection: Keep-Alive",
-        "Accept-Encoding: gzip",
+        "Accept-Encoding: gzip"
     ];
+    
+    $ch = curl_init();
+    curl_setopt_array($ch, [
+        CURLOPT_URL => $url,
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_ENCODING => 'gzip',
+        CURLOPT_TIMEOUT => 30,
+        CURLOPT_HTTPHEADER => $headers,
+        CURLOPT_FOLLOWLOCATION => true,
+        CURLOPT_SSL_VERIFYPEER => false,
+    ]);
+    
+    $response = curl_exec($ch);
+    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+    
+    if ($httpCode !== 200 || empty($response)) {
+        throw new Exception("Failed to fetch channels from portal. HTTP Code: $httpCode");
+    }
+    
+    $data = json_decode($response, true);
+    if (json_last_error() !== JSON_ERROR_NONE || !isset($data['js']['data'])) {
+        throw new Exception("Invalid response from portal");
+    }
+    
+    return $data['js']['data'];
+}
 
-    $playlist_result = Info($Playlist_url, $Playlist_HED);
-    $playlist_result_data = $playlist_result["Info_arr"]["data"];
-    $playlist_json_data = json_decode($playlist_result_data,true);
-    $timestamp = date('l jS \of F Y h:i:s A');
-    $tvCategories = group_title();
+function getFilteredGroups() {
+    global $directories, $host;
+    $filter_file = $directories["filter"] . "/$host.json";
+    
+    if (!file_exists($filter_file)) {
+        return [];
+    }
+    
+    $filters = json_decode(file_get_contents($filter_file), true);
+    if ($filters === null) {
+        return [];
+    }
+    
+    $filtered_groups = [];
+    foreach ($filters as $id => $filter) {
+        if (isset($filter['filter']) && $filter['filter'] === true) {
+            $filtered_groups[$id] = $filter['title'];
+        }
+    }
+    
+    return $filtered_groups;
+}
 
-    if (!empty($playlist_json_data)) {    
-        $playlistContent = "#EXTM3U\n#DATE:- $timestamp\n" . PHP_EOL;   
-        foreach ($playlist_json_data["js"]["data"] as $channel) {        
-            foreach ($tvCategories as $genreId => $categoryName) {              
-                if ($channel['tv_genre_id'] == $genreId) { 
-                    $cmd = $channel['cmd'];
-                    $id = generateId($cmd);                                       
-                    $playPath = str_replace("playlist.php", "play.php?id=" . $id , $currentScript);                                                  
-                    $playlistContent .= '#EXTINF:-1 tvg-id="' . $id . '" tvg-logo="' . getImageUrl($channel, $host) . '" group-title="' . $categoryName . '",' . $channel['name'] . "\r\n";
-                    $playlistContent .= "{$protocol}{$server}{$playPath}" . PHP_EOL . PHP_EOL;
+function generatePlaylist($channels, $base_url) {
+    $filtered_groups = getFilteredGroups();
+    $playlist = "#EXTM3U\n";
+    $playlist .= "# Playlist generated by mac2m3u\n";
+    $playlist .= "# Generated: " . date('Y-m-d H:i:s') . "\n";
+    $playlist .= "# Base URL: " . $base_url . "\n\n";
+    
+    $channel_count = 0;
+    
+    foreach ($channels as $channel) {
+        if (!isset($channel['id'], $channel['name'], $channel['number'])) {
+            continue;
+        }
+        
+        // Apply group filtering
+        if (!empty($filtered_groups)) {
+            $channel_genres = isset($channel['tv_genre_id']) ? (array)$channel['tv_genre_id'] : [];
+            $has_matching_genre = false;
+            
+            foreach ($channel_genres as $genre_id) {
+                if (isset($filtered_groups[$genre_id])) {
+                    $has_matching_genre = true;
+                    break;
+                }
+            }
+            
+            if (!$has_matching_genre) {
+                continue;
+            }
+        }
+        
+        $channel_id = $channel['id'];
+        $channel_name = htmlspecialchars($channel['name']);
+        $channel_number = $channel['number'];
+        $logo = isset($channel['logo']) ? htmlspecialchars($channel['logo']) : '';
+        
+        // Get group name
+        $group_title = 'General';
+        if (isset($channel['tv_genre_id'])) {
+            $genre_ids = (array)$channel['tv_genre_id'];
+            foreach ($genre_ids as $genre_id) {
+                if (isset($filtered_groups[$genre_id])) {
+                    $group_title = $filtered_groups[$genre_id];
+                    break;
                 }
             }
         }
         
-        header('Content-Type: audio/x-mpegurl');
-        header('Content-Disposition: inline; filename="playlist.m3u"');
-        echo $playlistContent;    
-        file_put_contents("$playlist_path/$host.m3u", $playlistContent);
-    } else {    
-        echo 'Empty or invalid response from the server.';    
+        // Create stream URL - using the Vercel function URL
+        $stream_url = $base_url . "play.php?id=" . $channel_id;
+        
+        // Add channel to playlist
+        $playlist .= "#EXTINF:-1 tvg-id=\"$channel_id\" tvg-name=\"$channel_name\" tvg-logo=\"$logo\" group-title=\"$group_title\",$channel_name\n";
+        $playlist .= "$stream_url\n\n";
+        
+        $channel_count++;
     }
+    
+    $playlist .= "# End of playlist\n";
+    $playlist .= "# Filtered channels: $channel_count\n";
+    
+    return $playlist;
+}
+
+try {
+    // Get channels from portal
+    $channels = getChannels($host, $Bearer_token, $mac);
+    
+    if (empty($channels)) {
+        throw new Exception("No channels found in portal response");
+    }
+    
+    // Generate base URL for stream links
+    $base_url = "https://" . $_SERVER['HTTP_HOST'] . "/api/";
+    
+    // Generate playlist
+    $playlist_content = generatePlaylist($channels, $base_url);
+    
+    // Cache the playlist
+    file_put_contents($playlist_file, $playlist_content);
+    
+    // Output playlist
+    header('Content-Type: audio/x-mpegurl');
+    header('Content-Disposition: attachment; filename="playlist_' . $host . '.m3u"');
+    header('Content-Length: ' . strlen($playlist_content));
+    echo $playlist_content;
+    
+} catch (Exception $e) {
+    header('Content-Type: text/plain');
+    $error_message = "#EXTM3U\n# Error: " . $e->getMessage() . "\n";
+    $error_message .= "# Please check your portal configuration and try again.\n";
+    echo $error_message;
 }
 ?>
