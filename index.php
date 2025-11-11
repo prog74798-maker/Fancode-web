@@ -25,3 +25,462 @@ if ($_SERVER['REQUEST_METHOD'] == 'OPTIONS') {
 
 // Your existing application code below...
 ?>
+<?php
+session_start();
+
+// Vercel session configuration
+ini_set('session.save_path', '/tmp');
+ini_set('session.gc_probability', 1);
+
+// Redirect if already logged in
+if (isset($_SESSION['user'])) {
+    header("Location: /api/dashboard.php");
+    exit();
+}
+
+$popup_type = "";
+$error = "";
+
+if ($_SERVER["REQUEST_METHOD"] == "POST") {
+    // Validate and sanitize inputs
+    $username = filter_input(INPUT_POST, 'username', FILTER_SANITIZE_STRING);
+    $password = filter_input(INPUT_POST, 'password', FILTER_SANITIZE_STRING);
+    
+    // Check if inputs are not empty
+    if (empty($username) || empty($password)) {
+        $error = "Please enter both username and password!";
+        $popup_type = "error";
+    } else {
+        // For Vercel deployment - you can set these as environment variables
+        $valid_username = getenv('APP_USERNAME') ?: 'admin';
+        $valid_password = getenv('APP_PASSWORD') ?: 'password';
+        
+        if ($username === $valid_username && $password === $valid_password) {
+            $_SESSION['user'] = $username;
+            $_SESSION['login_time'] = time();
+            $_SESSION['user_agent'] = $_SERVER['HTTP_USER_AGENT'];
+            $_SESSION['ip_address'] = $_SERVER['HTTP_X_FORWARDED_FOR'] ?? $_SERVER['REMOTE_ADDR'];
+            
+            header("Location: /api/dashboard.php");
+            exit();
+        } else {
+            $error = "Invalid username or password!";
+            $popup_type = "error";
+        }
+    }
+}
+?>
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>mac2m3u - Login</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e, #16213e, #0f3460);
+            min-height: 100vh;
+            margin: 0;
+            color: #e0e0e0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .container {
+            background: rgba(34, 40, 49, 0.95);
+            border-radius: 20px;
+            padding: 40px 30px;
+            width: 100%;
+            max-width: 400px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            text-align: center;
+            backdrop-filter: blur(10px);
+        }
+
+        .logo {
+            margin-bottom: 30px;
+        }
+
+        .logo i {
+            font-size: 4em;
+            color: #00d4ff;
+            text-shadow: 0 0 20px rgba(0, 212, 255, 0.5);
+            margin-bottom: 10px;
+        }
+
+        h2 {
+            color: #00d4ff;
+            text-shadow: 0 0 10px rgba(0, 212, 255, 0.5);
+            margin-bottom: 10px;
+            font-size: 1.8em;
+        }
+
+        .subtitle {
+            color: #a0a0a0;
+            margin-bottom: 30px;
+            font-size: 0.9em;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+            text-align: left;
+        }
+
+        .form-group label {
+            display: block;
+            font-weight: 600;
+            color: #a0a0a0;
+            margin-bottom: 8px;
+            font-size: 0.9em;
+        }
+
+        .form-group input {
+            width: 100%;
+            padding: 14px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 10px;
+            background: rgba(255, 255, 255, 0.08);
+            color: #e0e0e0;
+            font-size: 16px;
+            box-sizing: border-box;
+            transition: all 0.3s ease;
+        }
+
+        .form-group input:focus {
+            outline: none;
+            border-color: #00d4ff;
+            box-shadow: 0 0 10px rgba(0, 212, 255, 0.3);
+            background: rgba(255, 255, 255, 0.12);
+        }
+
+        .form-group input::placeholder {
+            color: rgba(224, 224, 224, 0.5);
+        }
+
+        button {
+            width: 100%;
+            padding: 16px;
+            border: none;
+            border-radius: 10px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            background: linear-gradient(45deg, #0077b6, #023e8a);
+            color: white;
+            box-shadow: 0 4px 15px rgba(0, 119, 182, 0.4);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+        }
+
+        button:hover {
+            background: linear-gradient(45deg, #0096c7, #0353a4);
+            box-shadow: 0 6px 20px rgba(0, 150, 199, 0.6);
+            transform: translateY(-2px);
+        }
+
+        .overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.8);
+            z-index: 999;
+            display: none;
+            backdrop-filter: blur(5px);
+        }
+
+        .popup {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(34, 40, 49, 0.98);
+            padding: 30px;
+            border-radius: 15px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.6);
+            z-index: 1000;
+            display: none;
+            width: 90%;
+            max-width: 400px;
+            text-align: center;
+            border: 2px solid;
+            backdrop-filter: blur(10px);
+        }
+
+        .popup.error {
+            border-color: #dc3545;
+        }
+
+        .popup.success {
+            border-color: #28a745;
+        }
+
+        .popup-message {
+            font-size: 16px;
+            margin-bottom: 20px;
+            line-height: 1.5;
+        }
+
+        .popup button {
+            width: auto;
+            padding: 12px 30px;
+            margin: 0 auto;
+            display: block;
+            background: linear-gradient(45deg, #0077b6, #023e8a);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .popup button:hover {
+            background: linear-gradient(45deg, #0096c7, #0353a4);
+            transform: translateY(-2px);
+        }
+
+        .footer {
+            text-align: center;
+            margin-top: 30px;
+            padding-top: 20px;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+            font-size: 14px;
+            color: #a0a0a0;
+        }
+
+        .features {
+            display: none;
+            margin-top: 30px;
+            padding: 20px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 10px;
+            text-align: left;
+        }
+
+        .features h3 {
+            color: #00d4ff;
+            margin-bottom: 15px;
+            text-align: center;
+        }
+
+        .features ul {
+            list-style: none;
+            padding: 0;
+        }
+
+        .features li {
+            padding: 8px 0;
+            color: #a0a0a0;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .features li i {
+            color: #00d4ff;
+            font-size: 0.8em;
+        }
+
+        .toggle-features {
+            background: transparent;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            color: #a0a0a0;
+            padding: 10px;
+            margin-top: 15px;
+            font-size: 12px;
+            width: auto;
+        }
+
+        .toggle-features:hover {
+            background: rgba(255, 255, 255, 0.1);
+            transform: none;
+        }
+
+        @media (max-width: 480px) {
+            .container {
+                padding: 30px 20px;
+            }
+            
+            h2 {
+                font-size: 1.5em;
+            }
+            
+            .form-group input {
+                padding: 12px;
+            }
+            
+            button {
+                padding: 14px;
+            }
+        }
+
+        .input-icon {
+            position: relative;
+        }
+
+        .input-icon i {
+            position: absolute;
+            left: 15px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: #a0a0a0;
+        }
+
+        .input-icon input {
+            padding-left: 45px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="logo">
+            <i class="fas fa-satellite-dish"></i>
+        </div>
+        
+        <h2>mac2m3u</h2>
+        <p class="subtitle">Convert Stalker Portal to M3U Playlist</p>
+        
+        <form method="POST" action="">
+            <div class="form-group input-icon">
+                <i class="fas fa-user"></i>
+                <input type="text" id="username" name="username" placeholder="Enter your username" required value="<?php echo isset($_POST['username']) ? htmlspecialchars($_POST['username']) : ''; ?>">
+            </div>
+            
+            <div class="form-group input-icon">
+                <i class="fas fa-lock"></i>
+                <input type="password" id="password" name="password" placeholder="Enter your password" required>
+            </div>
+            
+            <button type="submit">
+                <i class="fas fa-sign-in-alt"></i>
+                Login to Dashboard
+            </button>
+        </form>
+
+        <button class="toggle-features" onclick="toggleFeatures()">
+            <i class="fas fa-info-circle"></i>
+            Show Features
+        </button>
+
+        <div class="features" id="features">
+            <h3>🚀 Application Features</h3>
+            <ul>
+                <li><i class="fas fa-check"></i> Stalker Portal Integration</li>
+                <li><i class="fas fa-check"></i> M3U Playlist Generation</li>
+                <li><i class="fas fa-check"></i> Channel Group Filtering</li>
+                <li><i class="fas fa-check"></i> Real-time Stream Access</li>
+                <li><i class="fas fa-check"></i> Multi-Device Support</li>
+                <li><i class="fas fa-check"></i> Secure Authentication</li>
+            </ul>
+        </div>
+        
+        <div class="footer">
+            <strong>Coded with ❤️ by RKDYIPTV</strong>
+            <p style="margin-top: 8px; font-size: 12px; opacity: 0.7;">Powered by Vercel</p>
+        </div>
+    </div>
+
+    <!-- Popup and Overlay -->
+    <div id="overlay" class="overlay" onclick="hidePopup()"></div>
+    <div id="popup" class="popup <?php echo $popup_type; ?>">
+        <p class="popup-message" id="popup-message"></p>
+        <div id="popup-buttons">
+            <button onclick="hidePopup()">OK</button>
+        </div>
+    </div>
+</body>
+
+<script>
+    document.addEventListener("DOMContentLoaded", function() {
+        let errorMessage = "<?php echo $error; ?>";
+        if (errorMessage.trim() !== "") {
+            showPopup(errorMessage, 'error');
+        }
+
+        // Add input animations
+        const inputs = document.querySelectorAll('input');
+        inputs.forEach(input => {
+            input.addEventListener('focus', function() {
+                this.parentElement.style.transform = 'translateY(-2px)';
+            });
+            
+            input.addEventListener('blur', function() {
+                this.parentElement.style.transform = 'translateY(0)';
+            });
+        });
+
+        // Prevent form resubmission on refresh
+        if (window.history.replaceState) {
+            window.history.replaceState(null, null, window.location.href);
+        }
+    });
+
+    function showPopup(message, type = 'error') {
+        const popup = document.getElementById('popup');
+        const messageEl = document.getElementById('popup-message');
+        const overlay = document.getElementById('overlay');
+        
+        popup.className = `popup ${type}`;
+        messageEl.textContent = message;
+        popup.style.display = 'block';
+        overlay.style.display = 'block';
+    }
+
+    function hidePopup() {
+        document.getElementById('popup').style.display = 'none';
+        document.getElementById('overlay').style.display = 'none';
+    }
+
+    function toggleFeatures() {
+        const features = document.getElementById('features');
+        const button = document.querySelector('.toggle-features');
+        
+        if (features.style.display === 'block') {
+            features.style.display = 'none';
+            button.innerHTML = '<i class="fas fa-info-circle"></i> Show Features';
+        } else {
+            features.style.display = 'block';
+            button.innerHTML = '<i class="fas fa-times"></i> Hide Features';
+        }
+    }
+
+    // Add enter key support
+    document.addEventListener('keypress', function(e) {
+        if (e.key === 'Enter') {
+            document.querySelector('form').submit();
+        }
+    });
+
+    // Add loading state to form
+    document.querySelector('form').addEventListener('submit', function() {
+        const button = this.querySelector('button[type="submit"]');
+        const originalText = button.innerHTML;
+        button.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Logging in...';
+        button.disabled = true;
+        
+        // Re-enable button after 5 seconds (in case of error)
+        setTimeout(() => {
+            button.innerHTML = originalText;
+            button.disabled = false;
+        }, 5000);
+    });
+</script>
+</html>
